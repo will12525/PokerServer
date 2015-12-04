@@ -6,17 +6,19 @@ import java.util.List;
  * Created by lawrencew on 11/25/2015.
  */
 public class DataHolder extends Thread {
-    List<String> messages = new ArrayList<String>();
-    List<ClientThread> clients = new ArrayList<ClientThread>();
-    List<ClientThread> clientsToAdd = new ArrayList<>();
-    List<ClientThread> clientsToRemove = new ArrayList<ClientThread>();
-    List<ClientThread> clientMessageTrack = new ArrayList<ClientThread>();
-    List<ClientThread> bettingOrder = new ArrayList<>();
-    List<Card> dealerCards = new ArrayList<>();
+    private List<String> messages = new ArrayList<String>();
+    private List<ClientThread> clients = new ArrayList<ClientThread>();
+    private List<ClientThread> clientsToAdd = new ArrayList<>();
+    private List<ClientThread> clientsToRemove = new ArrayList<ClientThread>();
+    private List<ClientThread> clientMessageTrack = new ArrayList<ClientThread>();
+    private List<ClientThread> bettingOrder = new ArrayList<>();
+    private List<Card> dealerCards = new ArrayList<>();
+
     private boolean serverRunning = false;
     private Deck deck;
     private int startPlayer = 0;
     private boolean gameRunning = false;
+
     private int highBet=0;
     private int min,max,pot;
 
@@ -30,7 +32,7 @@ public class DataHolder extends Thread {
     public void run()
     {
         while(serverRunning) {
-            if(clientsToRemove.size()>0)
+            if(clientsToRemove.size()>0&&!gameRunning)
             {
                 removeClients();
             }
@@ -47,14 +49,6 @@ public class DataHolder extends Thread {
                 if (clientMessageTrack.size() > 0) {
                     clientMessageTrack.remove(0);
                 }
-            }
-
-
-
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
             }
         }
     }
@@ -76,17 +70,7 @@ public class DataHolder extends Thread {
 
             c14 pass buyinmoney
      */
-    public void broadCast()
-    {
-        for(ClientThread client : clients)
-        {
-            client.write("03"+highBet);
-            client.write("09"+client.getTotalBet());
-            client.write("10"+client.getCurrentBet());
-            client.write("11"+client.getTotalMoney());
-            client.write("14"+pot);
-        }
-    }
+
     public void blind(int min)
     {
 
@@ -102,12 +86,12 @@ public class DataHolder extends Thread {
 
         ClientThread client = clients.get(startPlayer);
         client.write("07");
-        client.setCurrentBet(min/2);
+        client.gotAnti(min/2);
 
         client=clients.get(bigBlind);
         highBet=min;
         client.write("07");
-        client.setCurrentBet(min);
+        client.gotAnti(min);
 
         for(int x=bigBlind+1;x<clients.size();x++)
         {
@@ -120,19 +104,17 @@ public class DataHolder extends Thread {
     }
     public void bets(boolean raised)
     {
-        broadCast();
         if(raised)
         {
             addMessage("The pot has been raised");
             for(ClientThread client: clients)
             {
                 client.addToTotalBet();
-                client.setCurrentBet(0);
+                client.gotBet(0);
             }
         }
         for(int x=0;x<bettingOrder.size();x++)
         {
-            broadCast();
             ClientThread client = bettingOrder.get(x);
             client.write("06");
             while (!client.checkRecievedBet())
@@ -160,14 +142,11 @@ public class DataHolder extends Thread {
 
             }
         }
-        broadCast();
     }
-    public void anti(int min)
+    public void anti()
     {
-        broadCast();
         for(ClientThread client: bettingOrder)
         {
-            broadCast();
             client.write("08");
             while (!client.checkRecievedBet())
             {
@@ -179,7 +158,6 @@ public class DataHolder extends Thread {
             }
 
         }
-        broadCast();
     }
     public boolean checkSimilar(ClientThread client)
     {
@@ -212,7 +190,14 @@ public class DataHolder extends Thread {
     {
         this.deck=deck;
     }
-
+    public int getPot()
+    {
+        return pot;
+    }
+    public int getHighBet()
+    {
+        return highBet;
+    }
     public void addToRemoveClients(ClientThread client)
     {
         clientsToRemove.add(client);
@@ -223,7 +208,7 @@ public class DataHolder extends Thread {
         {
             addMessage(client.getUsername()+" has left the channel");
             System.out.println(client.getUsername() + " has left the channel");
-            client.close();
+            //client.close();
         }
         clients.removeAll(clientsToRemove);
         clientsToRemove.clear();

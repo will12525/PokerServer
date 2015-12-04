@@ -1,6 +1,4 @@
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -11,32 +9,111 @@ import java.util.List;
  */
 public class ClientThread extends Thread{
 
-    private String username ="";
-    private BufferedReader bReader;
-    private PrintWriter pWriter;
-    private Socket socket;
-    private DataHolder data;
+    /*
+            c0 chat
+            c1 receive player cards
+            c2 get dealer cards
+            c3 get high bet
+            c4 request bet
+            c5 tells player if blind
+            c6 requests anti
+            c7 get total bet for the round
+            c8 get current bet for the betting instance
+            c9 get total player money
+            c10 gets buyInMin
+            c11 gets buyInMax
+
+            c12 request buy in money
+            c13 gets pot
+            c14 gets winning hand
+            c15 get winnings
+            c16 request name
+            c17 check connection
+            c18 new game
+            c19 fold
+    */
     private List<Card> playerCards = new ArrayList<>();
+    private boolean requestBet = false;
+    private boolean blind = false;
+    private boolean requestAnti = false;
     private int totalBet = 0;
     private int currentBet = 0;
     private int totalMoney = 0;
-    private boolean recievedBet = false;
+    private boolean requestBuyIn=true;
+    private boolean requestName = true;
+    private String username ="";
+    private boolean requestConnection = false;
+    private long checkConnection;
+    private boolean fold = false;
+
+    private boolean firstRun=true;
+    private boolean ready = false;
+    private boolean removeClient = false;
+
+    private int min,max;
+
+    private PrintWriter pWriter;
+    private DataHolder data;
 
     public ClientThread(final Socket socket, final DataHolder data,int min,int max)
     {
-        this.socket=socket;
+        checkConnection=System.currentTimeMillis();
+        this.min=min;
+        this.max=max;
         this.data=data;
         try{
-            bReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             pWriter = new PrintWriter(socket.getOutputStream(),true);
-            username = bReader.readLine();
-            write("12"+min);
-            write("13"+max);
         }catch(IOException e)
         {
             e.printStackTrace();
         }
+
+        new MessageReceiver(this,socket).start();
+        write("12");
+        write("13");
         this.start();
+    }
+
+    public void run()
+    {
+        long broadcastTime = System.currentTimeMillis();
+        while(true)
+        {
+            if(!requestName&&!requestBuyIn)
+            {
+                ready = true;
+            }
+            if((System.currentTimeMillis()-broadcastTime>(3000)||firstRun)&&ready)
+            {
+                broadCast();
+                broadcastTime=System.currentTimeMillis();
+            }
+            if(System.currentTimeMillis()-checkConnection>1000*30)
+            {
+                if(requestConnection)
+                {
+                    //player dissconected
+                    fold();
+                    removeClient();
+                }
+                else {
+                    write("17");
+                    checkConnection = System.currentTimeMillis();
+                    requestConnection = true;
+                }
+            }
+        }
+    }
+    public void broadCast()
+    {
+        write("03"+data.getHighBet());
+        write("07"+totalBet);
+        write("08"+currentBet);
+        write("09"+totalMoney);
+        write("10"+min);
+        write("11"+max);
+        write("13"+data.getPot());
+        firstRun=false;
     }
 
     public void bettingOver()
@@ -77,103 +154,96 @@ public class ClientThread extends Thread{
     {
         return currentBet;
     }
-    public void setCurrentBet(int bet)
-    {
-        currentBet=currentBet+bet;
-        totalMoney=totalMoney-bet;
-    }
+
     public boolean checkRecievedBet()
     {
-        return recievedBet;
+        return requestBet;
     }
-    public void write(String message)
+    public boolean checkRecievedAnti(){
+        return requestAnti;
+    }
+    public boolean checkFold()
     {
-        if(message.substring(0,2).equals("06")||message.substring(0,2).equals("08"))
-        {
-            recievedBet=false;
-        }
-        pWriter.println(message);
+        return fold;
     }
-
-    /* players need to:
-
-            code 1 See there cards
-            code 2 See dealer cards
-            code 3 know high bet
-            code 4 know winning hand
-            code 5 getWinnings
-            code 6 bet
-
-            FROM THE SERVER
-            c1 get there cards
-            c2 get dealer cards
-            c3 know high bet
-            c4 know winning hand
-            c5 get winnings
-            c7 who is blind
-            c8 anti
-
-            c9 total bet
-            c10 current bet
-            c11 totalmoney
-
-
-
-     */
-    public void run()
+    public boolean checkReady()
     {
-        String message;
-
-        while(true)
-        {
-            try {
-                if((message=bReader.readLine())!=null)
-                {
-                    if(message.equals("exit"))
-                    {
-                        data.addToRemoveClients(this);
-                    }
-                    else
-                    {
-                        System.out.println(message);
-                        if(message.substring(0,2).equals("06")||message.substring(0,2).equals("08"))
-                        {
-                            System.out.println("a bet was recieved");
-                            currentBet=Integer.parseInt(message.substring(2));
-                            recievedBet=true;
-                        }
-                        if(message.substring(0,2).equals("11"))
-                        {
-                            totalMoney=Integer.parseInt(message.substring(2));
-                        }
-                        //data.addMessage(message,this);
-
-
-
-
-
-                    }
-                }
-            }
-            catch(IOException e)
-            {
-
-            }
-        }
+        return ready;
     }
-
-    public void close()
+    public boolean removeClient()
     {
-        try {
-            socket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        return removeClient;
     }
-
     public String getUsername()
     {
         return username;
     }
 
+    public void write(String message)
+    {
+        if(message.substring(0,2).equals("04"))
+        {
+            requestBet=true;
+        }
+        if(message.substring(0,2).equals("06"))
+        {
+            requestAnti=true;
+        }
+        if(message.substring(0,2).equals("12"))
+        {
+            requestBuyIn=true;
+        }
+        if(message.substring(0,2).equals("16"))
+        {
+            requestName=true;
+        }
+        pWriter.println(message);
+    }
+
+    /*
+            c0 chat
+            c4 request bet
+            c6 requests anti
+            c12 request buy in money
+            c16 request name
+            c17 check connection
+            c19 fold
+    */
+    public void setRemoveClient()
+    {
+        removeClient=true;
+    }
+    public void addMessage(String message)
+    {
+        data.addMessage(message,this);
+    }
+    public void gotBet(int cBet)
+    {
+        requestBet=false;
+        currentBet=currentBet+cBet;
+        totalMoney=totalMoney-cBet;
+    }
+    public void gotAnti(int cAnti)
+    {
+        requestAnti=false;
+        currentBet=currentBet+cAnti;
+        totalMoney=totalMoney-cAnti;
+    }
+    public void gotTotalMoney(int tMoney)
+    {
+        requestBuyIn=false;
+        totalMoney=tMoney;
+    }
+    public void setUsername(String name)
+    {
+        username=name;
+    }
+    public void connected()
+    {
+        requestConnection=false;
+    }
+    public void fold()
+    {
+        fold = true;
+    }
 }
