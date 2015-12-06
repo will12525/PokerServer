@@ -18,18 +18,20 @@ public class MessageReceiver extends Thread {
         {
 
         }
+        start();
     }
     public void run()
     {
         String message;
-        while(true)
+        while(client.isConnected())
         {
             try {
                 if((message=bReader.readLine())!=null)
                 {
+                    System.out.println("recieved response: "+message+" from "+client.getUsername());
                     if(message.equals("exit"))
                     {
-                        client.setRemoveClient();
+                        client.disconnect();
                         return;
                     }
                     else

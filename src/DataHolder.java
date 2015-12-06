@@ -1,4 +1,5 @@
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 
@@ -18,7 +19,7 @@ public class DataHolder extends Thread {
     private Deck deck;
     private int startPlayer = 0;
     private boolean gameRunning = false;
-
+    private boolean firstWave=false;
     private int highBet=0;
     private int min,max,pot;
 
@@ -32,20 +33,17 @@ public class DataHolder extends Thread {
     public void run()
     {
         while(serverRunning) {
-            if(clientsToRemove.size()>0&&!gameRunning)
-            {
-                removeClients();
-            }
+
             if (messages.size()>0) {
 
                 String message = messages.get(0);
                 for (ClientThread client : clients) {
                     if (!checkSimilar(client)) {
-                        client.write(message);
+                     //   client.write(message);
                     }
 
                 }
-               messages.remove(0);
+                messages.remove(0);
                 if (clientMessageTrack.size() > 0) {
                     clientMessageTrack.remove(0);
                 }
@@ -53,27 +51,32 @@ public class DataHolder extends Thread {
         }
     }
     /*
-            c1 get there cards
+            c0 chat
+            c1 receive player cards
             c2 get dealer cards
-            c3 know high bet
-            c4 know winning hand
-            c5 get winnings
-            c6 bet
-            c7 who is blind
-            c8 anti
-
-            c9 total bet
-            c10 current bet
-            c11 totalmoney
-            c12 buyInMin
-            c13 buyInMax
-
-            c14 pass buyinmoney
+            c3 get high bet
+            c4 request bet
+            c5 tells player if blind
+            c6 requests anti
+            c7 get total bet for the round
+            c8 get current bet for the betting instance
+            c9 get total player money
+            c10 gets buyInMin
+            c11 gets buyInMax
+            c12 request buy in money
+            c13 gets pot
+            c14 gets winning hand
+            c15 get winnings
+            c16 request name
+            c17 check connection
+            c18 new game
+            c19 fold
      */
 
-    public void blind(int min)
-    {
 
+    public void blind()
+    {
+        firstWave=true;
         if(startPlayer>clients.size())
         {
             startPlayer=0;
@@ -85,103 +88,146 @@ public class DataHolder extends Thread {
         }
 
         ClientThread client = clients.get(startPlayer);
-        client.write("07");
-        client.gotAnti(min/2);
+        client.write("05");
+        client.isBlind(min/2);
 
         client=clients.get(bigBlind);
         highBet=min;
-        client.write("07");
-        client.gotAnti(min);
-
+        client.write("05");
+        client.isBlind(min);
+        System.out.println(clients.size());
         for(int x=bigBlind+1;x<clients.size();x++)
         {
-            bettingOrder.add(clients.get(x));
+            System.out.println("first loop: "+x);
+            client = clients.get(x);
+            if(client.checkReady())
+            {
+                bettingOrder.add(client);
+            }
         }
         for(int x=0;x<bigBlind+1;x++)
         {
-            bettingOrder.add(clients.get(x));
+            System.out.println("second loop: "+x);
+            client=clients.get(x);
+            if(client.checkReady())
+            {
+                bettingOrder.add(client);
+            }
         }
     }
     public void bets(boolean raised)
     {
+
+        if(!raised)
+        {
+            highBet=0;
+        }
         if(raised)
         {
             addMessage("The pot has been raised");
-            for(ClientThread client: clients)
-            {
-                client.addToTotalBet();
-                client.gotBet(0);
-            }
+            raised=false;
         }
+
         for(int x=0;x<bettingOrder.size();x++)
         {
             ClientThread client = bettingOrder.get(x);
-            client.write("06");
-            while (!client.checkRecievedBet())
+            client.broadCast();
+            if(client.checkFold())
+            {
+                continue;
+            }
+            client.write("04");
+            while (client.checkRecievedBet())
             {
                 try {
-                    Thread.sleep(500);
+                    Thread.sleep(1);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
 
-            if(client.getCurrentBet()>highBet)
+          //  client.addToTotalBet();
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            if(firstWave)
             {
-                highBet=client.getCurrentBet();
-                if(x==bettingOrder.size()-1)
-                {
-                    bets(true);
-                }
+                highBet=client.getTotalBet();
+                firstWave=false;
+            }
+            if(client.getTotalBet()>highBet)
+            {
+                highBet=client.getTotalBet();
+                raised=true;
             }
         }
-        if(!raised) {
-            for (ClientThread client : clients) {
-                pot = pot+ client.getTotalBet();
-                client.bettingOver();
 
-            }
+        if(raised)
+        {
+            bets(true);
         }
+      /*  else {
+            for (ClientThread client : clients) {
+                pot = pot + client.getTotalBet();
+                client.bettingOver();
+            }
+        }*/
     }
     public void anti()
     {
         for(ClientThread client: bettingOrder)
         {
-            client.write("08");
-            while (!client.checkRecievedBet())
+            if(client.checkFold())
+            {
+                continue;
+            }
+            client.broadCast();
+            client.write("06");
+            while (client.checkRecievedAnti())
             {
                 try {
-                    Thread.sleep(500);
+                    Thread.sleep(1);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
             }
-
         }
+
     }
-    public boolean checkSimilar(ClientThread client)
+    public void totalPot()
     {
-        return clientMessageTrack.size() > 0 && clientMessageTrack.get(0) == client;
+        for(ClientThread client:clients)
+        {
+            pot =pot+client.getTotalBet();
+            client.bettingOver();
+        }
     }
     public void distributeDealerCards(int amount)
     {
         for(int x=0;x<amount;x++)
         {
+            System.out.println("sending dealer cards");
             Card card = deck.getTopCard();
             dealerCards.add(card);
-            messages.add("02"+card.getType());
+            for (ClientThread client : clients)
+            {
+                client.write("02"+card.getType());
+            }
 
         }
 
     }
     public void distributePlayerCards()
     {
-        for(ClientThread client : clients)
+        for(ClientThread client : bettingOrder)
         {
             for(int x=0;x<2;x++)
             {
-                client.addCard(deck.checkCard(0));
-                client.write("01"+(deck.getTopCard().getType()));
+                Card card = deck.getTopCard();
+                client.addCard(card);
+                client.write("01"+(card.getType()));
             }
         }
     }
@@ -198,33 +244,145 @@ public class DataHolder extends Thread {
     {
         return highBet;
     }
-    public void addToRemoveClients(ClientThread client)
+
+    public void newGame()
     {
-        clientsToRemove.add(client);
+        for(ClientThread client: clients)
+        {
+            client.newGame();
+        }
+        gameRunning=false;
+    }
+    public void distributeWinnings()
+    {
+        DetermineRank rank = new DetermineRank();
+        int folded=0;
+        for(ClientThread client : clients)
+        {
+            if(client.checkFold())
+            {
+                folded++;
+                if(folded==clientSize())
+                {
+                    return;
+                }
+                continue;
+            }
+            List<Card> finalCards = new ArrayList<>();
+            finalCards.addAll(dealerCards);
+            finalCards.addAll(client.getCards());
+            client.setHandRank(rank.determineRank(finalCards));
+        }
+
+        int lastRank =0;
+        int highCard=0;
+        int secondHigh=0;
+        ClientThread winningClient=null;
+        for(ClientThread client:clients)
+        {
+            if(client.checkFold())
+            {
+                continue;
+            }
+            String theRank = client.getHandRank();
+            int currentRank = Integer.parseInt(theRank.substring(0,2));
+            System.out.println("Rank: "+currentRank+", "+lastRank);
+            if(currentRank>lastRank)
+            {
+                lastRank=currentRank;
+                winningClient=client;
+                if(theRank.length()>2)
+                {
+                    highCard=Integer.parseInt(theRank.substring(2,4));
+                }
+                if(theRank.length()>4)
+                {
+                    secondHigh=Integer.parseInt(theRank.substring(4,6));
+                }
+            }
+            else if (currentRank == lastRank) {
+                if (theRank.length() > 2) {
+                    int currentHighCard = Integer.parseInt(theRank.substring(2, 4));
+                    System.out.println("HighCard: " + currentHighCard + ", " + highCard);
+                    if (currentHighCard > highCard)
+                    {
+                        highCard = currentHighCard;
+                        winningClient = client;
+                    }
+                    else if(currentHighCard==highCard)
+                    {
+                        if(theRank.length()>4)
+                        {
+                            int currentSecondHigh = Integer.parseInt(theRank.substring(4,6));
+                            if(currentSecondHigh>secondHigh)
+                            {
+                                winningClient=client;
+                                highCard=currentHighCard;
+                                secondHigh=currentSecondHigh;
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+
+        String winner;
+        for(ClientThread client: clients)
+        {
+            if(client==winningClient)
+            {
+                winner="t";
+                client.write("15"+pot);
+            }
+            else
+            {
+                winner="f";
+            }
+            client.write("14"+winner+winningClient.getUsername()+","+rank.decodeRank(winningClient.getHandRank()));
+        }
+        pot=0;
     }
     public void removeClients()
     {
-        for(ClientThread client : clientsToRemove)
+        for(ClientThread client : clients)
         {
-            addMessage(client.getUsername()+" has left the channel");
-            System.out.println(client.getUsername() + " has left the channel");
-            //client.close();
+            if(!client.isConnected())
+            {
+                addMessage(client.getUsername()+" has left the channel");
+                System.out.println(client.getUsername() + " has left the channel");
+                clientsToRemove.add(client);
+            }
+
         }
+        for(ClientThread client : clientsToAdd)
+        {
+            if(!client.isConnected())
+            {
+                clientsToRemove.add(client);
+            }
+        }
+        clientsToAdd.removeAll(clientsToRemove);
         clients.removeAll(clientsToRemove);
         clientsToRemove.clear();
     }
     public void addClient(ClientThread client)
     {
-        addMessage("User " + client.getUsername() + " has joined");
-        System.out.println("User " + client.getUsername() + " has joined");
-        if(!gameRunning)
+        clientsToAdd.add(client);
+    }
+    public void addClients()
+    {
+        for(ClientThread client:clientsToAdd)
         {
-            clients.add(client);
+            if(client.checkReady())
+            {
+                addMessage("User " + client.getUsername() + " has joined");
+                System.out.println("User " + client.getUsername() + " has joined");
+                clients.add(client);
+            }
         }
-        else
-        {
-            clientsToAdd.add(client);
-        }
+        clientsToAdd.removeAll(clients);
+
     }
 
     public boolean checkForClient(ClientThread client)
@@ -235,15 +393,16 @@ public class DataHolder extends Thread {
     {
         return clients.size();
     }
-
-
     public void addMessage(String theMessage,ClientThread client)
     {
         clientMessageTrack.add(client);
         messages.add("00"+client.getUsername()+": "+theMessage);
         System.out.println(client.getUsername()+": "+theMessage);
     }
-
+    public boolean checkSimilar(ClientThread client)
+    {
+        return clientMessageTrack.size() > 0 && clientMessageTrack.get(0) == client;
+    }
     //usually from server
     public void addMessage(String theMessage)
     {
@@ -251,20 +410,6 @@ public class DataHolder extends Thread {
     }
 
 
-    public void newGame()
-    {
-        for(ClientThread client: clients)
-        {
-            client.clearCards();
-            client.bettingOver();
-        }
-        clients.addAll(clientsToAdd);
-        gameRunning=false;
-    }
-    public void distributeWinnings()
-    {
-
-    }
     public void setGameRunning(boolean running)
     {
         gameRunning=running;

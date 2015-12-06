@@ -18,6 +18,11 @@ public class Card {
         return suite;
     }
     public int getValue() {
+
+        if(value==1)
+        {
+            return 14;
+        }
         return value;
     }
 

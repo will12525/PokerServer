@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * Created by lawrencew on 11/25/2015.
  */
-public class ClientThread extends Thread{
+public class ClientThread extends Thread {
 
     /*
             c0 chat
@@ -37,66 +37,63 @@ public class ClientThread extends Thread{
     private boolean blind = false;
     private boolean requestAnti = false;
     private int totalBet = 0;
-    private int currentBet = 0;
+   // private int currentBet = 0;
     private int totalMoney = 0;
-    private boolean requestBuyIn=true;
+    private boolean requestBuyIn = true;
     private boolean requestName = true;
-    private String username ="";
+    private String username = "";
     private boolean requestConnection = false;
     private long checkConnection;
     private boolean fold = false;
-
-    private boolean firstRun=true;
+    private boolean connected = true;
+    private String handRank ="";
+    private boolean firstRun = true;
     private boolean ready = false;
     private boolean removeClient = false;
 
-    private int min,max;
+    private int min, max;
 
     private PrintWriter pWriter;
     private DataHolder data;
 
-    public ClientThread(final Socket socket, final DataHolder data,int min,int max)
-    {
-        checkConnection=System.currentTimeMillis();
-        this.min=min;
-        this.max=max;
-        this.data=data;
-        try{
-            pWriter = new PrintWriter(socket.getOutputStream(),true);
-        }catch(IOException e)
-        {
+    public ClientThread(final Socket socket, final DataHolder data, int min, int max) {
+        checkConnection = System.currentTimeMillis();
+        this.min = min;
+        this.max = max;
+        this.data = data;
+        try {
+            pWriter = new PrintWriter(socket.getOutputStream(), true);
+        } catch (IOException e) {
             e.printStackTrace();
         }
 
-        new MessageReceiver(this,socket).start();
+        new MessageReceiver(this, socket);
+        write("10"+min);
+        write("11"+max);
         write("12");
-        write("13");
+        write("16");
         this.start();
     }
 
-    public void run()
-    {
+    public void run() {
         long broadcastTime = System.currentTimeMillis();
-        while(true)
-        {
-            if(!requestName&&!requestBuyIn)
-            {
+        while (connected) {
+            if (!requestName && !requestBuyIn) {
                 ready = true;
-            }
-            if((System.currentTimeMillis()-broadcastTime>(3000)||firstRun)&&ready)
-            {
                 broadCast();
-                broadcastTime=System.currentTimeMillis();
             }
-            if(System.currentTimeMillis()-checkConnection>1000*30)
-            {
-                if(requestConnection)
-                {
-                    //player dissconected
+            if ((System.currentTimeMillis() - broadcastTime > (1000*5) || firstRun) && ready) {
+                broadCast();
+                broadcastTime = System.currentTimeMillis();
+                System.out.println("broadcasting");
+            }
+            if (System.currentTimeMillis() - checkConnection > 1000 * 10) {
+                if (requestConnection) {
+                    System.out.println("stopping");
+                    connected=false;
                     fold();
-                    removeClient();
-                }
-                else {
+                    interrupt();
+                } else {
                     write("17");
                     checkConnection = System.currentTimeMillis();
                     requestConnection = true;
@@ -104,79 +101,85 @@ public class ClientThread extends Thread{
             }
         }
     }
-    public void broadCast()
-    {
-        write("03"+data.getHighBet());
-        write("07"+totalBet);
-        write("08"+currentBet);
-        write("09"+totalMoney);
-        write("10"+min);
-        write("11"+max);
-        write("13"+data.getPot());
-        firstRun=false;
+
+    public void broadCast() {
+        write("03" + data.getHighBet());
+     //   write("07" + totalBet);
+        write("08" + totalBet);
+        write("09" + totalMoney);
+        write("10" + min);
+        write("11" + max);
+        write("13" + data.getPot());
+        write("21"+data.clientSize());
+        firstRun = false;
     }
 
-    public void bettingOver()
-    {
-        totalBet=0;
-        currentBet=0;
+    public void bettingOver() {
+        totalBet = 0;
     }
-    public void addCard(Card newCard)
-    {
+
+    public void addCard(Card newCard) {
         playerCards.add(newCard);
     }
-    public List<Card> getCards()
-    {
+
+    public List<Card> getCards() {
         return playerCards;
     }
-    public void clearCards()
-    {
-        playerCards.clear();
-    }
 
-    public int getTotalMoney()
-    {
+    public int getTotalMoney() {
         return totalMoney;
     }
-    public void setTotalMoney(int newMoney)
-    {
-        totalMoney=totalMoney+newMoney;
-    }
-    public int getTotalBet()
-    {
+
+    public int getTotalBet() {
         return totalBet;
     }
-    public void addToTotalBet()
-    {
-        totalBet=totalBet+currentBet;
-    }
-    public int getCurrentBet()
-    {
-        return currentBet;
-    }
 
-    public boolean checkRecievedBet()
-    {
+    public boolean checkRecievedBet() {
         return requestBet;
     }
-    public boolean checkRecievedAnti(){
+
+    public boolean checkRecievedAnti() {
         return requestAnti;
     }
-    public boolean checkFold()
-    {
+
+    public boolean checkFold() {
         return fold;
     }
-    public boolean checkReady()
-    {
+
+    public boolean checkReady() {
         return ready;
     }
-    public boolean removeClient()
+
+    public void setHandRank(String rank)
     {
-        return removeClient;
+        handRank=rank;
     }
-    public String getUsername()
+    public String getHandRank()
     {
+        return handRank;
+    }
+
+    public String getUsername() {
         return username;
+    }
+
+    public boolean isConnected()
+    {
+        return connected;
+    }
+
+    public void newGame()
+    {
+        totalBet=0;
+        playerCards.clear();
+        fold=false;
+        write("20");
+    }
+    public void isBlind(int amount)
+    {
+        totalBet=amount;
+        totalMoney=totalMoney-amount;
+        blind=true;
     }
 
     public void write(String message)
@@ -184,6 +187,10 @@ public class ClientThread extends Thread{
         if(message.substring(0,2).equals("04"))
         {
             requestBet=true;
+        }
+        if(message.substring(0,2).equals("05"))
+        {
+            blind=true;
         }
         if(message.substring(0,2).equals("06"))
         {
@@ -193,11 +200,22 @@ public class ClientThread extends Thread{
         {
             requestBuyIn=true;
         }
+        if(message.substring(0,2).equals("15"))
+        {
+            totalMoney=totalMoney+data.getPot();
+        }
         if(message.substring(0,2).equals("16"))
         {
             requestName=true;
         }
-        pWriter.println(message);
+        if(connected) {
+            pWriter.println(message);
+            pWriter.flush();
+        }
+        else
+        {
+            fold = true;
+        }
     }
 
     /*
@@ -209,10 +227,10 @@ public class ClientThread extends Thread{
             c17 check connection
             c19 fold
     */
-    public void setRemoveClient()
+  /*  public void setRemoveClient()
     {
         removeClient=true;
-    }
+    }*/
     public void addMessage(String message)
     {
         data.addMessage(message,this);
@@ -220,23 +238,30 @@ public class ClientThread extends Thread{
     public void gotBet(int cBet)
     {
         requestBet=false;
-        currentBet=currentBet+cBet;
+        totalBet=totalBet+cBet;
         totalMoney=totalMoney-cBet;
     }
     public void gotAnti(int cAnti)
     {
         requestAnti=false;
-        currentBet=currentBet+cAnti;
+        totalBet=totalBet+cAnti;
         totalMoney=totalMoney-cAnti;
     }
     public void gotTotalMoney(int tMoney)
     {
+        System.out.println(tMoney);
         requestBuyIn=false;
         totalMoney=tMoney;
     }
     public void setUsername(String name)
     {
         username=name;
+        requestName=false;
+        System.out.println(username);
+    }
+    public void disconnect()
+    {
+        connected=false;
     }
     public void connected()
     {
@@ -244,6 +269,12 @@ public class ClientThread extends Thread{
     }
     public void fold()
     {
+        requestAnti=false;
+        requestBet=false;
         fold = true;
+    }
+    public void setPoints(int points)
+    {
+
     }
 }

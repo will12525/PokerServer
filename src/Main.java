@@ -53,13 +53,17 @@ public class Main extends Thread{
                 }
             }
             else {
-                String time = timeDelay-((System.currentTimeMillis()-activate)/1000)+"";
+                long time = timeDelay-((System.currentTimeMillis()-activate)/1000);
                 System.out.println(time);
                 data.addMessage("Seconds until next game: "+time);
                 try {
                     sleep(1000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
+                }
+                if(time==20)
+                {
+                    data.newGame();
                 }
             }
 
@@ -68,30 +72,52 @@ public class Main extends Thread{
                 data.setGameRunning(true);
                 deck = new Deck(1);
                 data.passDeck(deck);
-                data.blind(buyInMin);
+                data.blind();
                 data.distributePlayerCards();
                 data.anti();
-
+                data.totalPot();
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
 
                 data.distributeDealerCards(3);
                 data.bets(false);
-
+                data.totalPot();
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
 
                 data.distributeDealerCards(1);
                 data.bets(false);
-
+                data.totalPot();
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
 
                 data.distributeDealerCards(1);
                 data.bets(false);
+                data.totalPot();
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
 
-
+                data.distributeWinnings();
                 //check winnings and distribute money
-                data.newGame();
+             //   data.newGame();
                 startGame=false;
 
                 activate=System.currentTimeMillis();
             }
-
+            data.addClients();
+            data.removeClients();
 
 
         }
