@@ -95,7 +95,6 @@ public class DataHolder extends Thread {
         highBet=min;
         client.write("05");
         client.isBlind(min);
-        System.out.println(clients.size());
         for(int x=bigBlind+1;x<clients.size();x++)
         {
             System.out.println("first loop: "+x);
@@ -168,12 +167,12 @@ public class DataHolder extends Thread {
         {
             bets(true);
         }
-      /*  else {
+        else {
             for (ClientThread client : clients) {
                 pot = pot + client.getTotalBet();
                 client.bettingOver();
             }
-        }*/
+        }
     }
     public void anti()
     {
@@ -193,6 +192,10 @@ public class DataHolder extends Thread {
                     e.printStackTrace();
                 }
             }
+        }
+        for (ClientThread client : clients) {
+            pot = pot + client.getTotalBet();
+            client.bettingOver();
         }
 
     }

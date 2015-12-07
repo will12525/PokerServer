@@ -75,7 +75,7 @@ public class Main extends Thread{
                 data.blind();
                 data.distributePlayerCards();
                 data.anti();
-                data.totalPot();
+               // data.totalPot();
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException e) {
@@ -84,7 +84,7 @@ public class Main extends Thread{
 
                 data.distributeDealerCards(3);
                 data.bets(false);
-                data.totalPot();
+                //data.totalPot();
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException e) {
@@ -93,7 +93,7 @@ public class Main extends Thread{
 
                 data.distributeDealerCards(1);
                 data.bets(false);
-                data.totalPot();
+              //  data.totalPot();
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException e) {
@@ -102,7 +102,7 @@ public class Main extends Thread{
 
                 data.distributeDealerCards(1);
                 data.bets(false);
-                data.totalPot();
+               // data.totalPot();
                 try {
                     Thread.sleep(500);
                 } catch (InterruptedException e) {
